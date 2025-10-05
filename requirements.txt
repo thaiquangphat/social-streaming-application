@@ -1,0 +1,4 @@
+uv
+nltk
+pyspark
+sentence-transformers

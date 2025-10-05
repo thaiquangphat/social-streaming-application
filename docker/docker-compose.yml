@@ -1,0 +1,14 @@
+version: "3"
+services:
+  spark-master:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.spark
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ../src:/src
+      - ../config:/config
