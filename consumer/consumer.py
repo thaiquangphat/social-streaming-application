@@ -211,7 +211,7 @@ class RedditKafkaConsumer:
 def example_submission_handler(event: RedditSubmissionEvent, metadata: dict) -> None:
     """Example handler for submission events."""
     logger.info(
-        f"Received submission: {event.title}"
+        f"Received submission: {event.title}... "
         f"from r/{event.subreddit} by u/{event.author} "
         f"[score: {event.score}, comments: {event.num_comments}]",
         extra=metadata

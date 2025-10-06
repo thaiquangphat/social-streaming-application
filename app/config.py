@@ -1,7 +1,6 @@
 from __future__ import annotations
 from functools import lru_cache
 from typing import Any, Literal
-from loguru import logger
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -54,7 +53,6 @@ def load_settings() -> AppSettings:
         reddit=reddit,
         topics=topics
     )
-    logger.debug(f"Loaded app settings {settings.model_dump_json(indent=2)}")
     return settings
 
 

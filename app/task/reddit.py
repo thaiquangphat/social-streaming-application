@@ -7,7 +7,6 @@ from app.clients.reddit_client import RedditClient
 from prefect.cache_policies import NO_CACHE
 from app.config import load_settings
 from prefect.logging import get_logger
-from .state import get_last_timestamp, set_last_timestamp
 
 
 logger = get_logger()
@@ -52,11 +51,9 @@ def fetch_and_publish_reddit_events(
         time.sleep(1)
         logger.info(f"Found {len(subreddits)} trending subreddits: {subreddits}")
 
-        latest_utc_datetime = get_last_timestamp()
 
 
 
-        all_created_utc = []
         for subreddit_idx, subreddit_name in enumerate(subreddits, 1):
             logger.info(
                 f"Processing subreddit {subreddit_idx}/{len(subreddits)}: r/{subreddit_name}"
@@ -75,9 +72,7 @@ def fetch_and_publish_reddit_events(
                 try:
                     submission_event = reddit_client._serialize_submission(submission)
                     created_utc = submission_event.created_utc
-                    all_created_utc.append(created_utc)
-                    if latest_utc_datetime is not None and created_utc <= latest_utc_datetime:
-                        continue
+                   
                             
                     envelope = build_envelope(
                         entity_type="reddit_submission",
@@ -149,18 +144,6 @@ def fetch_and_publish_reddit_events(
                 f"Completed r/{subreddit_name}: "
             )
         kafka_publisher.flush(timeout=30.0)
-
-
-        if all_created_utc:
-            recent_latest_utc = max(all_created_utc)
-            if latest_utc_datetime is None:
-                new_latest_utc = recent_latest_utc
-            else:
-                new_latest_utc = max(recent_latest_utc, latest_utc_datetime)
-            set_last_timestamp(new_latest_utc)
-            logger.info(f"Updated last timestamp to {new_latest_utc}")
-        else:
-            logger.info("No new submissions processed; not updating timestamp.")
 
 
         logger.info(
