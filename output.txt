@@ -1,0 +1,176 @@
+===== app/config/__init__.py =====
+
+
+===== app/clients/x_client.py =====
+import time
+from dataclasses import dataclass
+
+import tweepy
+
+class XClientError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class XConfig:
+    bearer_token: str
+    consumer_key: str
+    consumer_secret: str
+    access_token: str
+    access_token_secret: str
+
+
+class XClient:
+    def __init__(self, config: XConfig) -> None:
+        self.config = config
+        self.client = tweepy.Client(
+            bearer_token=config.bearer_token,
+            consumer_key=config.consumer_key,
+            consumer_secret=config.consumer_secret,
+            access_token=config.access_token,
+            access_token_secret=config.access_token_secret,
+            wait_on_rate_limit=True
+        )
+
+
+    def poll_recent_tweets(
+        self,
+        queyr
+    )
+
+
+
+===== app/clients/reddit_client.py =====
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Generator, Iterable
+
+import praw
+import prawcore
+
+
+class RedditClientError(RuntimeError):
+    """Raised when the Reddit client encounters an API failure."""
+
+
+@dataclass(frozen=True)
+class RedditConfig:
+    client_id: str
+    client_secret: str
+    user_agent: str
+    username: str | None = None
+    password: str | None = None
+
+
+class RedditClient:
+    def __init__(self, config: RedditConfig) -> None:
+        self.config = config
+        try:
+            self.api = praw.Reddit(
+                client_id=config.client_id,
+                client_secret=config.client_secret,
+                password=config.password,
+                user_agent=config.user_agent,
+                username=config.username,
+            )
+        except Exception as exc:  # praw raises generic errors on bad auth
+            raise RedditClientError("Failed to initialise PRAW client") from exc
+
+    def stream_submissions(
+        self,
+        subreddits: Iterable[str],
+        *,
+        skip_existing: bool = True,
+    ) -> Generator[dict, None, None]:
+        """Yield new submissions from the given subreddits."""
+
+        joined = "+".join(subreddits)
+        subreddit = self.api.subreddit(joined)
+
+        try:
+            for submission in subreddit.stream.submissions(skip_existing=skip_existing):
+                yield self._serialize_submission(submission)
+        except prawcore.exceptions.PrawcoreException as exc:
+            raise RedditClientError("Failed while streaming submissions") from exc
+
+    def stream_comments(
+        self,
+        subreddits: Iterable[str],
+        *,
+        skip_existing: bool = True,
+    ) -> Generator[dict, None, None]:
+        """Yield new comments from the given subreddits."""
+
+        joined = "+".join(subreddits)
+        subreddit = self.api.subreddit(joined)
+
+        try:
+            for comment in subreddit.stream.comments(skip_existing=skip_existing):
+                yield self._serialize_comment(comment)
+        except prawcore.exceptions.PrawcoreException as exc:
+            raise RedditClientError("Failed while streaming comments") from exc
+
+    @staticmethod
+    def _serialize_submission(submission: praw.models.Submission) -> dict:
+        author = getattr(submission.author, "name", None)
+        subreddit = getattr(submission.subreddit, "display_name", None)
+        return {
+            "type": "submission",
+            "id": submission.id,
+            "author": author,
+            "title": submission.title,
+            "selftext": submission.selftext,
+            "created_utc": submission.created_utc,
+            "score": submission.score,
+            "num_comments": submission.num_comments,
+            "subreddit": subreddit,
+            "permalink": submission.permalink,
+            "url": submission.url,
+        }
+
+    @staticmethod
+    def _serialize_comment(comment: praw.models.Comment) -> dict:
+        return {
+            "type": "comment",
+            "id": comment.id,
+            "author": getattr(comment.author, "name", None),
+            "body": comment.body,
+            "created_utc": comment.created_utc,
+            "score": comment.score,
+            "subreddit": comment.subreddit.display_name,
+            "link_id": comment.link_id,
+            "parent_id": comment.parent_id,
+            "permalink": comment.permalink,
+        }
+
+
+===== app/clients/__init__.py =====
+from .reddit_client import RedditClient, RedditClientError, RedditConfig
+from .x_client import XClient, XClientError, XConfig
+
+__all__ = [
+    "RedditClient",
+    "RedditClientError",
+    "RedditConfig",
+    "XClient",
+    "XClientError",
+    "XConfig",
+]
+
+
+===== app/flows/__init__.py =====
+
+
+===== app/__init__.py =====
+
+
+===== app/kafka/__init__.py =====
+
+
+===== infra/README.md =====
+# Local Infrastructure Notes
+
+Placeholder for Kafka, Prefect, and MinIO setup instructions.
+
+
