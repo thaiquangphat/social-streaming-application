@@ -3,3 +3,4 @@ nltk
 pyspark
 sentence-transformers
 keybert
+pyyaml
