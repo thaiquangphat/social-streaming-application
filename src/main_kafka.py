@@ -92,8 +92,9 @@ def run_spark_stream(topic: str, kafka_bootstrap: str = "localhost:9092", use_ka
     if use_kafka:
         query = (
             df.writeStream
-            .outputMode("append")
-            .format("console")
+            .format("kafka")
+            .option("kafka.bootstrap.servers", "localhost:9092")
+            .option("topic", "processed_topic")
             .start()
         )
         query.awaitTermination()
