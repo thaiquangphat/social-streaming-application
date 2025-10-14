@@ -1,14 +1,21 @@
 import argparse
-import json
 from pyspark.sql.functions import col, from_json
 from pyspark.sql.types import (
     StructType, StructField, StringType, IntegerType, TimestampType, MapType
 )
+import os
+import sys
 
-from ultis.spark import get_spark_session
-from processing.cleaner import clean_text_udf
-from processing.keyword_extractor import keyword_extractor_udf
-from processing.embedder import embedder_udf
+ROOT_DIR = os.path.abspath(
+    os.path.join(__file__, '../../..')
+)
+print(ROOT_DIR)
+sys.path.insert(0,ROOT_DIR)
+
+from app.spark.utils.spark import get_spark_session
+from app.spark.processing.cleaner import clean_text_udf
+from app.spark.processing.keyword_extractor import keyword_extractor_udf
+from app.spark.processing.embedder import embedder_udf
 
 
 # ===== PAYLOAD SCHEMAS =====
@@ -90,11 +97,20 @@ def run_spark_stream(topic: str, kafka_bootstrap: str = "localhost:9092", use_ka
     df = process_stream(df)
 
     if use_kafka:
+        base_dir = "/tmp/spark-data"  
+
+        kafka_save_dir = f"{base_dir}/kafka/output/{topic}"
+        checkpoint_dir = f"{base_dir}/kafka/checkpoints/{topic}"
+
+        os.makedirs(kafka_save_dir, exist_ok=True)
+        os.makedirs(checkpoint_dir, exist_ok=True)
+
         query = (
             df.writeStream
-            .format("kafka")
-            .option("kafka.bootstrap.servers", "localhost:9092")
-            .option("topic", "processed_topic")
+            .format("json")
+            .option("path", kafka_save_dir)
+            .option("checkpointLocation", checkpoint_dir)
+            .outputMode("append")
             .start()
         )
         query.awaitTermination()
@@ -111,7 +127,7 @@ if __name__ == "__main__":
         "--topic",
         type=str,
         choices=["reddit.submissions", "reddit.comments"],
-        required=True,
+        default="reddit.submissions",
         help="Kafka topic to read from."
     )
     parser.add_argument("--bootstrap", type=str, default="localhost:9092", help="Kafka bootstrap server.")

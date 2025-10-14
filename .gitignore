@@ -7,7 +7,7 @@ __pycache__/
 *.so
 infra/
 logs/
-
+local/
 **/.spec-workflow/
 
 # Distribution / packaging

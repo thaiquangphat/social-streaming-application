@@ -1,7 +1,16 @@
-from ultis.spark import get_spark_session
-from processing.cleaner import clean_text_udf
-from processing.keyword_extractor import keyword_extractor_udf
-from processing.embedder import embedder_udf
+import os
+import sys
+
+ROOT_DIR = os.path.abspath(
+    os.path.join(__file__, '../../..')
+)
+print(ROOT_DIR)
+sys.path.insert(0,ROOT_DIR)
+
+from app.spark.utils.spark import get_spark_session
+from app.spark.processing.cleaner import clean_text_udf
+from app.spark.processing.keyword_extractor import keyword_extractor_udf
+from app.spark.processing.embedder import embedder_udf
 from pyspark.sql.functions import col
 
 def main():
