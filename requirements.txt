@@ -1,0 +1,6 @@
+uv
+nltk
+pyspark
+sentence-transformers
+keybert
+pyyaml

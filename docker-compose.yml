@@ -1,4 +1,42 @@
 services:
+  spark-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+    volumes:
+      - ./src:/opt/spark-apps
+      - ./data:/opt/spark-data
+      - ./config:/opt/spark-config
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    networks:
+      - spark-net
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER=spark://spark-master:7077
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    ports:
+      - "8081:8081"
+    networks:
+      - spark-net
+
+networks:
+  spark-net:
+    driver: bridge
+services:
 
   broker:
     image: confluentinc/cp-kafka:8.0.0
