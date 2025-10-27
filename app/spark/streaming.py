@@ -4,11 +4,18 @@ from pyspark.sql.types import (
     StructType, StructField, StringType, IntegerType, TimestampType, MapType
 )
 import os
+import sys
+ROOT_DIR = os.path.abspath(os.path.join(__file__, '../../..'))
 
-from ultis.spark import get_spark_session
-from processing.cleaner import clean_text_udf
-from processing.keyword_extractor import keyword_extractor_udf
-from processing.embedder import embedder_udf
+sys.path.insert(0,ROOT_DIR)
+
+
+
+from app.spark.utils.spark import get_spark_session
+from app.spark.processing.cleaner import clean_text_udf
+from app.spark.processing.keyword_extractor import keyword_extractor_udf
+from app.spark.processing.embedder import embedder_udf
+
 
 
 # ===== PAYLOAD SCHEMAS =====
@@ -64,7 +71,11 @@ def process_stream(df):
 
 
 # ===== MAIN DRIVER =====
-def run_spark_stream(topic: str, kafka_bootstrap: str = "localhost:9092", use_kafka=True):
+def run_spark_stream(
+        topic: str, 
+        kafka_bootstrap: str = "localhost:9092",
+        save_dir: str | None = None
+    ):
     spark = get_spark_session(f"SparkPreprocessing-{topic.replace('.', '_')}")
 
     if topic == "reddit.submissions":
@@ -74,44 +85,42 @@ def run_spark_stream(topic: str, kafka_bootstrap: str = "localhost:9092", use_ka
     else:
         raise ValueError(f"Unsupported topic: {topic}")
 
-    if use_kafka:
-        df = (
-            spark.readStream
-            .format("kafka")
-            .option("kafka.bootstrap.servers", kafka_bootstrap)
-            .option("subscribe", topic)
-            .load()
-            .selectExpr("CAST(value AS STRING) as json_str")
-        )
-        df = df.withColumn("json_data", from_json(col("json_str"), envelope_schema)).select("json_data.*")
-    else:
-        df = spark.read.option("multiLine", True).json(r"/opt/spark-data/raw/sample.json")
-
+    
+    df = (
+        spark.readStream
+        .format("kafka")
+        .option("kafka.bootstrap.servers", kafka_bootstrap)
+        .option("startingOffsets", "earliest")
+        .option("failOnDataLoss", "false")
+        .option("subscribe", topic)
+        .load()
+        .selectExpr("CAST(value AS STRING) as json_str")
+    )
+    df = df.withColumn("json_data", from_json(col("json_str"), envelope_schema)).select("json_data.*")
     df = process_stream(df)
 
-    if use_kafka:
-        kafka_save_dir = r"data/kafka/{topic}"
-        os.makedirs(kafka_save_dir, exist_ok=True)
-        base_dir = "/tmp/spark-data"  
+    base_dir = (
+        save_dir
+        if save_dir is not None
+        else os.environ.get("SPARK_SAVE_DIR", "/tmp/spark-data")
+    )
 
-        kafka_save_dir = f"{base_dir}/kafka/output/{topic}"
-        checkpoint_dir = f"{base_dir}/kafka/checkpoints/{topic}"
+    kafka_save_dir = f"{base_dir}/kafka/output/{topic}"
+    checkpoint_dir = f"{base_dir}/kafka/checkpoints/{topic}"
 
-        os.makedirs(kafka_save_dir, exist_ok=True)
-        os.makedirs(checkpoint_dir, exist_ok=True)
+    os.makedirs(kafka_save_dir, exist_ok=True)
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
-        query = (
-            df.writeStream
-            .format("json")
-            .option("path", kafka_save_dir)
-            .option("checkpointLocation", checkpoint_dir)
-            .outputMode("append")
-            .start()
-        )
-        query.awaitTermination()
-    else:
-        df.write.mode("overwrite").json(r"/opt/spark-data/processed/")
-
+    print(f"Writing stream to {kafka_save_dir} with checkpoint {checkpoint_dir}")
+    query = (
+        df.writeStream
+        .format("json")
+        .option("path", kafka_save_dir)
+        .option("checkpointLocation", checkpoint_dir)
+        .outputMode("append")
+        .start()
+    )
+    query.awaitTermination()
     spark.stop()
 
 
@@ -126,11 +135,18 @@ if __name__ == "__main__":
         help="Kafka topic to read from."
     )
     parser.add_argument("--bootstrap", type=str, default="localhost:9092", help="Kafka bootstrap server.")
-    parser.add_argument("--offline", action="store_true", help="Use local JSON instead of Kafka stream.")
-
+    parser.add_argument(
+        "--save-dir",
+        type=str,
+        default=None,
+        help=(
+            "Base directory for streaming output and checkpoints. "
+            "Defaults to $SPARK_SAVE_DIR if set, otherwise /tmp/spark-data."
+        ),
+    )
     args = parser.parse_args()
     run_spark_stream(
         topic=args.topic,
         kafka_bootstrap=args.bootstrap,
-        use_kafka=not args.offline
+        save_dir=args.save_dir,
     )
